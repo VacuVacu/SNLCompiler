@@ -1,0 +1,69 @@
+<Program> : <ProgramHead> <DeclarePart> <ProgramBody>
+<ProgramHead> : PROGRAM  <ProgramName>
+<ProgramName> : ID
+<DeclarePart> : <TypeDec>  <VarDec>  <ProcDec>
+<TypeDec> : $ | <TypeDeclaration>
+<TypeDeclaration> : TYPE <TypeDecList>
+<TypeDecList> : <TypeId> = <TypeName> ; <TypeDecMore>
+<TypeDecMore> : $ | <TypeDecList>
+<TypeId> : ID
+<TypeName> : <BaseType> | <StructureType> | ID
+<BaseType> : INTEGER | CHAR
+<StructureType> : <ArrayType> | <RecType>
+<ArrayType> : ARRAY [ <Low> .. <Top> ] OF <BaseType>
+<Low> : INTC
+<Top> : INTC
+<RecType> : RECORD  <FieldDecList> END
+<FieldDecList> : <BaseType> <IdList> ; <FieldDecMore> | <ArrayType> <IdList> ; <FieldDecMore>
+<FieldDecMore> : $ | <FieldDecList>
+<IdList> : ID <IdMore>
+<IdMore> : $ | , <IdList>
+<VarDec> : $ | <VarDeclaration>
+<VarDeclaration> : VAR  <VarDecList>
+<VarDecList> : <TypeName> <VarIdList> ; <VarDecMore>
+<VarDecMore> : $ | <VarDecList>
+<VarIdList> : ID  <VarIdMore>
+<VarIdMore> : $ | , <VarIdList>
+<ProcDec> : $ | <ProcDeclaration>
+<ProcDeclaration> : PROCEDURE <ProcName> ( <ParamList> )  ; <ProcDecPart> <ProcBody> <ProcDecMore>
+<ProcDecMore> : $ | <ProcDeclaration>
+<ProcName> : ID
+<ParamList> : $ | <ParamDecList>
+<ParamDecList> : <Param>  <ParamMore>
+<ParamMore> : $ | ; <ParamDecList>
+<Param> : <TypeName>  <FormList> | VAR <TypeName>  <FormList>
+<FormList> : ID  <FidMore>
+<FidMore> : $ | , <FormList>
+<ProcDecPart> : <DeclarePart>
+<ProcBody> : <ProgramBody>
+<ProgramBody> : BEGIN <StmList> END
+<StmList> : <Stm> <StmMore>
+<StmMore> : $ | ;  <StmList>
+<Stm> : <ConditionalStm> | <LoopStm> | <InputStm> | <OutputStm> | <ReturnStm> | ID <AssCall>
+<AssCall> : <AssignmentRest> | <CallStmRest>
+<AssignmentRest> : <VariMore> := <Exp>
+<ConditionalStm> : IF <RelExp> THEN <StmList> ELSE <StmList> FI
+<LoopStm> : WHILE  <RelExp> DO <StmList> ENDWH
+<InputStm> : READ ( <Invar> )
+<Invar> : ID
+<OutputStm> : WRITE ( <Exp> )
+<ReturnStm> : RETURN ( <Exp> )
+<CallStmRest> : ( <ActParamList> )
+<ActParamList> : $ | <Exp>  <ActParamMore>
+<ActParamMore> : $ | ,  <ActParamList>
+<RelExp> : <Exp>  <OtherRelE>
+<OtherRelE> : <CmpOp> <Exp>
+<Exp> : <Term> <OtherTerm>
+<OtherTerm> : $ | <AddOp> <Exp>
+<Term> : <Factor> <OtherFactor>
+<OtherFactor> : $ | <MultOp>  <Term>
+<Factor> : ( <Exp> ) | INTC | <Variable>
+<Variable> : ID <VariMore>
+<VariMore> : $ | [ <Exp> ] | . <FieldVar>
+<FieldVar> : ID <FieldVarMore>
+<FieldVarMore> : $ | [ <Exp> ]
+<CmpOp> : < | =
+<AddOp> : + | -
+<MultOp> : * | /
+
+
