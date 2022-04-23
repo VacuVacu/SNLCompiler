@@ -20,8 +20,10 @@ public class SyntaxAnalysis {
     private TreeNode root;  //语法树根节点
     private Stack<TreeNode> preF;  //cur前一个指向
     private List<TreeNode> Exps;  //符号栈 用来中缀转后缀
+    private List<TreeNode> Params; //参数栈 处理函数参数
     private TreeNode cur;    //当前栈中最接近栈顶的父节点
     private int expflag = 0;
+    private int flag = 0;
 
     void createPredictTable(){
         PredictTable[Symple.Program][-LexItem.PROGRAM] = 1;
@@ -362,8 +364,10 @@ public class SyntaxAnalysis {
         treeStack = new Stack<TreeNode>();
         Exps = new ArrayList<>();
         preF = new Stack<>();
+        Params = new ArrayList<>();
         tokenIndex = 0;
-        expflag = 0;
+        flag = 0;
+        this.expflag = 0;
         createPredictTable();
         signStack.push(Symple.EOF);
         signStack.push(Symple.Program);
@@ -401,15 +405,19 @@ public class SyntaxAnalysis {
     Stack<TreeNode> transform(){
         Stack<TreeNode> backExp = new Stack<>();
         Stack<TreeNode> opStack = new Stack<>();
-        while(!Exps.isEmpty()&&!isEnd(Exps.get(0))){
-            TreeNode node = Exps.remove(0);
+        while(!Exps.isEmpty()){
+            TreeNode node = Exps.remove(Exps.size()-1);
+            if(isEnd(node))
+                break;
 //            if(isEnd(node)||Exps.size()==0) break;
             if(getNodeLexItem(node)==LexItem.PLUS||getNodeLexItem(node)==LexItem.MINUS)
-                operationOpStack(opStack,backExp,node,1);
-            else if(getNodeLexItem(node)==LexItem.TIMES||getNodeLexItem(node)==LexItem.OVER)
                 operationOpStack(opStack,backExp,node,2);
+            else if(getNodeLexItem(node)==LexItem.TIMES||getNodeLexItem(node)==LexItem.OVER)
+                operationOpStack(opStack,backExp,node,3);
+            else if(getNodeLexItem(node)==LexItem.LT||getNodeLexItem(node)==LexItem.EQ)
+                operationOpStack(opStack,backExp,node,1);
             else if(getNodeLexItem(node)==LexItem.LPAREN)
-                backExp.push(node);
+                opStack.push(node);
             else if(getNodeLexItem(node)==LexItem.RPAREN){
                 operationParen(opStack,backExp);
                 expflag--;
@@ -417,8 +425,33 @@ public class SyntaxAnalysis {
             else
                 backExp.push(node);
         }
-
+        while (!opStack.isEmpty()) {
+            backExp.push(opStack.pop());
+        }
         return backExp;
+    }
+
+    TreeNode formFactor(Stack<TreeNode> backs){
+        Stack<TreeNode> nums = new Stack<>();
+        for(int i = 0;i<backs.size();i++){
+            if(getNodeLexItem(backs.get(i))==LexItem.INTC||getNodeLexItem(backs.get(i))==LexItem.ID){
+                nums.push(backs.get(i));
+            }
+            else{
+                TreeNode num1 = nums.pop();
+                if(getNodeLexItem(num1)==LexItem.LPAREN){
+                    System.out.println("括号不匹配");
+                    return null;
+                }
+                TreeNode num2 = nums.pop();
+                TreeNode op = backs.get(i);
+                op.children[0] = num1;
+                op.children[1] = num2;
+                nums.push(op);
+            }
+        }
+        if(nums.size()==1) return nums.pop();
+        return null;
     }
 
     public void operationOpStack(Stack<TreeNode> opStack,Stack<TreeNode> backExp,TreeNode opThis, int prec1) {//运算符栈操作
@@ -426,13 +459,16 @@ public class SyntaxAnalysis {
             TreeNode opTop = opStack.pop();
             if (getNodeLexItem(opTop)==LexItem.LPAREN) {
                 opStack.push(opTop);
+                break;
             }
             else {
                 int prec2;
                 if (getNodeLexItem(opTop)==LexItem.PLUS||getNodeLexItem(opTop)==LexItem.MINUS)
+                    prec2 = 2;
+                else if(getNodeLexItem(opTop)==LexItem.LT||getNodeLexItem(opTop)==LexItem.EQ)
                     prec2 = 1;
                 else
-                    prec2 = 2;
+                    prec2 = 3;
                 if (prec2 < prec1) {
                     opStack.push(opTop);
                     break;
@@ -494,9 +530,9 @@ public class SyntaxAnalysis {
                         case 24:process24();break;
                         case 25:process25();break;
                         case 26:process26();break;
-                        case 27:process27();break;
-                        case 28:process28();break;
-                        case 29:process29();break;
+                        case 27:process27(token);break;
+                        case 28:process28(token);break;
+                        case 29:process29(token);break;
                         case 30:process30();break;
                         case 31:process31();break;
                         case 32:process32(token);break;
@@ -563,11 +599,11 @@ public class SyntaxAnalysis {
                         case 93:process93(token);break;
                         case 94:process94(token);break;
                         case 95:process95(token);break;
-                        case 96:process96();break;
+                        case 96:process96(token);break;
                         case 97:process97();break;
-                        case 98:process98();break;
-                        case 99:process99();break;
-                        case 100:process100();break;
+                        case 98:process98(token);break;
+                        case 99:process99(token);break;
+                        case 100:process100(token);break;
                         case 101:process101(token);break;
                         case 102:process102(token);break;
                         case 103:process103(token);break;
@@ -592,6 +628,10 @@ public class SyntaxAnalysis {
                         signStack.pop();
                         tokenIndex++;
                     }
+                    else if(match(token,LexItem.UNDERANGE)){
+                        signStack.pop();
+                        tokenIndex++;
+                    }
                     else if(match(token,LexItem.LPAREN)){
                         signStack.pop();
                         tokenIndex++;
@@ -600,9 +640,77 @@ public class SyntaxAnalysis {
                         signStack.pop();
                         tokenIndex++;
                     }
+                    else if(match(token,LexItem.END)){
+                        signStack.pop();
+                        tokenIndex++;
+                    }
+                    else if(match(token,LexItem.ASSIGN)){
+                        signStack.pop();
+                        tokenIndex++;
+                        TreeNode node = new TreeNode();
+                        node.nodeKind = NodeIdentity.ExpK;
+                        ExpAttr attr = new ExpAttr();
+                        node.attr = attr;
+                        Exps.add(node);
+                    }
+                    else if(match(token,LexItem.THEN)){
+                        Stack<TreeNode> nodes = transform();
+                        TreeNode node = formFactor(nodes);
+                        if(node==null) {
+                            System.out.println("出错");
+                            return;
+                        }
+                        TreeNode top = treeStack.peek();
+                        top.children[0] = node;
+                        signStack.pop();
+                        tokenIndex++;
+                        flag = 1;
+                    }
+                    else if(match(token,LexItem.DO)){
+                        Stack<TreeNode> nodes = transform();
+                        TreeNode node = formFactor(nodes);
+                        if(node==null) {
+                            System.out.println("出错");
+                            return;
+                        }
+                        TreeNode top = treeStack.peek();
+                        top.children[0] = node;
+                        signStack.pop();
+                        tokenIndex++;
+                        flag = 1;
+                    }
+                    else if(match(token,LexItem.ENDWH)){
+                        this.cur = this.preF.pop();
+                        signStack.pop();
+                        tokenIndex++;
+                    }
+                    else if(match(token,LexItem.ELSE)){
+                        flag = 2;
+                        signStack.pop();
+                        tokenIndex++;
+                    }
+                    else if(match(token,LexItem.FI)){
+                        signStack.pop();
+                        tokenIndex++;
+                        treeStack.push(this.cur);
+                        this.cur = this.preF.pop();
+                    }
+                    else if(match(token,LexItem.OF)){
+                        signStack.pop();
+                        tokenIndex++;
+                    }else if(match(token,LexItem.DOT)){
+                        signStack.pop();
+                        tokenIndex++;
+                    }
                 }
 
+            }else{
+                System.out.println("程序代码不完全");
+                break;
             }
+        }
+        if(tokenIndex!= wordAutomat.getTokenNums()-1||tokenIndex!= wordAutomat.getTokenNums()- wordAutomat.getCommentNums()){
+            System.out.println("程序出现额外语句");
         }
 
     }
@@ -683,18 +791,23 @@ public class SyntaxAnalysis {
         signStack.push(Symple.TypeName);
         signStack.push(LexItem.EQ);
         signStack.push(Symple.TypeId);
-        this.preF.push(this.cur);
-        this.cur = treeStack.peek();
+        TreeNode top = treeStack.peek();
         TreeNode node = new TreeNode();
         node.nodeKind = NodeIdentity.DecK;
-        cur.children[0]=node;
+        if(top.nodeKind==NodeIdentity.TypeK){
+            this.preF.push(this.cur);
+            this.cur = treeStack.peek();
+            top.children[0]=node;
+        }
+        else
+            top.sibling = node;
         treeStack.push(node);
     }
 
     void process9(){
         signStack.pop();
-        TreeNode node = treeStack.get(treeStack.size()-2);
-        node.sibling = null;
+//        TreeNode node = treeStack.get(treeStack.size()-2);
+//        node.sibling = null;
         while(treeStack.peek()!=this.cur) treeStack.pop();
 //        while(treeStack.peek().sibling!=null) treeStack.pop();
         treeStack.pop();
@@ -760,11 +873,17 @@ public class SyntaxAnalysis {
         if(match(token,LexItem.INTEGER)){
             TreeNode top = treeStack.peek();
             if(this.cur.nodeKind==NodeIdentity.TypeK){
+                if(top.kind==SubIdentity.ArrayK){
+                    ArrayAttr attr = (ArrayAttr)top.attr;
+                    attr.typename = "Integer";
+                    tokenIndex++;
+                    return;
+                }
                 top.kind = SubIdentity.IntegerK;
-                TreeNode node = new TreeNode();
-                node.nodeKind = NodeIdentity.DecK;
-                top.sibling = node;
-                treeStack.push(node);
+//                TreeNode node = new TreeNode();
+//                node.nodeKind = NodeIdentity.DecK;
+//                top.sibling = node;
+//                treeStack.push(node);
             }
             else if(this.cur.nodeKind==NodeIdentity.VarK){
                 top.type_name = "Integer";
@@ -775,6 +894,8 @@ public class SyntaxAnalysis {
             }else if(this.cur.nodeKind==NodeIdentity.ProcDecK){
                 ProcAttr attr = (ProcAttr) top.attr;
                 attr.type.add("Integer");
+            }else if(this.cur.kind==SubIdentity.RecordK){
+                top.kind = SubIdentity.IntegerK;
             }
             tokenIndex++;
         }
@@ -788,6 +909,11 @@ public class SyntaxAnalysis {
         if(match(token,LexItem.CHAR)){
             TreeNode top = treeStack.peek();
             if(this.cur.nodeKind==NodeIdentity.TypeK){
+                if(top.kind==SubIdentity.ArrayK){
+                    ArrayAttr attr = (ArrayAttr)top.attr;
+                    attr.typename = "Integer";
+                    return;
+                }
                 top.kind = SubIdentity.CharK;
                 TreeNode node = new TreeNode();
                 node.nodeKind = NodeIdentity.DecK;
@@ -803,6 +929,8 @@ public class SyntaxAnalysis {
             }else if(this.cur.nodeKind==NodeIdentity.ProcDecK){
                 ProcAttr attr = (ProcAttr) top.attr;
                 attr.type.add("Char");
+            }else if(this.cur.kind==SubIdentity.RecordK){
+                top.kind = SubIdentity.IntegerK;
             }
             tokenIndex++;
         }
@@ -818,7 +946,7 @@ public class SyntaxAnalysis {
 
     void process18(){
         signStack.pop();
-        signStack.push(Symple.ArrayType);
+        signStack.push(Symple.RecType);
     }
 
     void process19(Token token){
@@ -827,12 +955,10 @@ public class SyntaxAnalysis {
             TreeNode top = treeStack.peek();
             top.kind = SubIdentity.ArrayK;
             tokenIndex++;
-            TreeNode node = new TreeNode();
-            node.nodeKind = NodeIdentity.DecK;
-            node.attr = new ArrayAttr();
-            node.line = token.getLine();
-            top.sibling = node;
-            treeStack.push(node);
+
+            ArrayAttr attr = new ArrayAttr();
+            top.attr = attr;
+            top.line = token.getLine();
             signStack.push(Symple.BaseType);
             signStack.push(LexItem.OF);
             signStack.push(LexItem.RMIDPAREN);
@@ -869,35 +995,85 @@ public class SyntaxAnalysis {
 
     //处理记录类型
     void process22(Token token){
-
+        signStack.pop();
+        if(match(token,LexItem.RECORD)){
+            signStack.push(LexItem.END);
+            signStack.push(Symple.FieldDecList);
+            tokenIndex++;
+            TreeNode top = treeStack.peek();
+            top.kind = SubIdentity.RecordK;
+            TreeNode node = new TreeNode();
+            node.nodeKind = NodeIdentity.DecK;
+            top.children[0] = node;
+            treeStack.push(node);
+            this.preF.push(this.cur);
+            this.cur = top;
+        }
+        else {
+            System.out.println("出错");
+        }
     }
     //处理记录类型
     void process23(){
-
+        signStack.pop();
+        signStack.push(Symple.FieldDecMore);
+        signStack.push(LexItem.SEMI);
+        signStack.push(Symple.IdList);
+        signStack.push(Symple.BaseType);
     }
     //处理记录类型
     void process24(){
-
+        signStack.pop();
+        signStack.push(Symple.FieldDecMore);
+        signStack.push(LexItem.SEMI);
+        signStack.push(Symple.IdList);
+        signStack.push(Symple.ArrayType);
     }
     //处理记录类型
     void process25(){
-
+        signStack.pop();
+        while(treeStack.peek()!=this.cur) treeStack.pop();
+        this.cur = this.preF.pop();
     }
     //处理记录类型
     void process26(){
+        signStack.pop();
+        signStack.push(Symple.FieldDecList);
+        TreeNode node = new TreeNode();
+        node.nodeKind = NodeIdentity.DecK;
+        TreeNode top = treeStack.peek();
+        top.sibling = node;
+        treeStack.push(node);
+    }
+
+    void process27(Token token){
+        signStack.pop();
+        if(match(token,LexItem.ID)){
+            signStack.push(Symple.IdMore);
+            tokenIndex++;
+            TreeNode top = treeStack.peek();
+            if(top.name.size()==0)
+                top.line = token.getLine();
+            top.name.add(token.getSeminfo());
+        }else{
+            System.out.println("出错");
+        }
+    }
+
+    void process28(Token token){
+        signStack.pop();
 
     }
 
-    void process27(){
-
-    }
-
-    void process28(){
-
-    }
-
-    void process29(){
-
+    void process29(Token token){
+        signStack.pop();
+        if(match(token,LexItem.COMMA)){
+            tokenIndex++;
+            signStack.push(Symple.IdList);
+        }
+        else{
+            System.out.println("出错");
+        }
     }
 
     //处理Var
@@ -934,8 +1110,8 @@ public class SyntaxAnalysis {
         signStack.push(Symple.TypeName);
         TreeNode top = treeStack.peek();
         if(top.nodeKind!=0) {
-            this.cur = top;
             this.preF.push(this.cur);
+            this.cur = top;
             TreeNode node = new TreeNode();
             node.nodeKind = NodeIdentity.DecK;
             top.children[0] = node;
@@ -1175,19 +1351,32 @@ public class SyntaxAnalysis {
         node.nodeKind = NodeIdentity.StmtK;
         TreeNode top = treeStack.peek();
         if(top.nodeKind==NodeIdentity.StmtK)
-            top.sibling = node;
+            if(flag==1){
+                top.children[1] = node;
+                flag = 0;
+            }
+            else if(flag==2) {
+                top.children[2] = node;
+                flag = 0;
+            }
+            else
+                top.sibling = node;
         else
             top.children[0] = node;
         treeStack.push(node);
-        this.preF.push(this.cur);
-        this.cur = top;
+        if(top.kind!=SubIdentity.ReadK) {
+            this.preF.push(this.cur);
+            this.cur = top;
+        }
     }
 
     void process59(){
         signStack.pop();
-        TreeNode node = treeStack.get(treeStack.size()-2);
-        node.sibling = null;
+//        TreeNode node = treeStack.get(treeStack.size()-2);
+//        if(node.nodeKind==0)
+//            node.sibling = null;
         while(treeStack.peek()!=this.cur) treeStack.pop();
+
         treeStack.pop();
         this.cur = this.preF.pop();
     }
@@ -1206,11 +1395,16 @@ public class SyntaxAnalysis {
     void process61(){
         signStack.pop();
         signStack.push(Symple.ConditionalStm);
+        TreeNode top = treeStack.peek();
+        top.kind = SubIdentity.IfK;
+
     }
 
     void process62(){
         signStack.pop();
         signStack.push(Symple.LoopStm);
+        TreeNode top = treeStack.peek();
+        top.kind = SubIdentity.WhileK;
     }
 
     void process63(){
@@ -1226,6 +1420,7 @@ public class SyntaxAnalysis {
     void process65(){
         signStack.pop();
         signStack.push(Symple.ReturnStm);
+        this.cur.kind = SubIdentity.ReturnK;
     }
 
     void process66(Token token){
@@ -1281,13 +1476,7 @@ public class SyntaxAnalysis {
             signStack.push(Symple.StmList);
             signStack.push(LexItem.THEN);
             signStack.push(Symple.RelExp);
-            TreeNode node = new TreeNode();
-            node.nodeKind = NodeIdentity.StmtK;
-            TreeNode top = treeStack.peek();
-            top.children[0] = node;
-            treeStack.push(node);
-            this.preF.push(this.cur);
-            this.cur = node;
+
         }
     }
 
@@ -1298,13 +1487,7 @@ public class SyntaxAnalysis {
             signStack.push(Symple.StmList);
             signStack.push(LexItem.DO);
             signStack.push(Symple.RelExp);
-            TreeNode node = new TreeNode();
-            node.nodeKind = NodeIdentity.StmtK;
-            TreeNode top = treeStack.peek();
-            top.children[0] = node;
-            treeStack.push(node);
-            this.preF.push(this.cur);
-            this.cur = node;
+            tokenIndex++;
         }else{
             System.out.println("出错");
         }
@@ -1317,11 +1500,10 @@ public class SyntaxAnalysis {
             token = wordAutomat.getToken(tokenIndex);
             if(match(token,LexItem.LPAREN)){
                 signStack.push(Symple.InVar);
-                TreeNode node = new TreeNode();
-                node.nodeKind = NodeIdentity.StmtK;
                 TreeNode top = treeStack.peek();
-                top.children[0] = node;
-                treeStack.push(node);
+                top.kind = SubIdentity.ReadK;
+                top.line = token.getLine();
+                tokenIndex++;
             }else{
                 System.out.println("出错");
             }
@@ -1334,8 +1516,6 @@ public class SyntaxAnalysis {
         signStack.pop();
         if(match(token,LexItem.ID)){
             TreeNode top = treeStack.peek();
-            top.kind = SubIdentity.ReadK;
-            top.line = token.getLine();
             top.name.add(token.getSeminfo());
             tokenIndex++;
             token = wordAutomat.getToken(tokenIndex);
@@ -1355,13 +1535,20 @@ public class SyntaxAnalysis {
             tokenIndex++;
             token = wordAutomat.getToken(tokenIndex);
             if(match(token,LexItem.LPAREN)){
+                signStack.push(LexItem.RPAREN);
                 signStack.push(Symple.Exp);
-                TreeNode node = new TreeNode();
-                node.nodeKind = NodeIdentity.StmtK;
                 TreeNode top = treeStack.peek();
                 top.kind = SubIdentity.WriteK;
-                top.children[0] = node;
-                treeStack.push(node);
+                top.line = token.getLine();
+
+                TreeNode node = new TreeNode();
+                node.nodeKind = NodeIdentity.ExpK;
+                ExpAttr attr = new ExpAttr();
+                node.attr = attr;
+                Exps.add(node);
+                this.preF.push(this.cur);
+                this.cur=top;
+                tokenIndex++;
             }else{
                 System.out.println("出错");
             }
@@ -1381,8 +1568,8 @@ public class SyntaxAnalysis {
         signStack.pop();
         if(match(token,LexItem.LPAREN)){
             tokenIndex++;
+            signStack.push(LexItem.RPAREN);
             signStack.push(Symple.ActParamList);
-
         }
     }
 
@@ -1394,10 +1581,42 @@ public class SyntaxAnalysis {
         signStack.pop();
         signStack.push(Symple.ActParamMore);
         signStack.push(Symple.Exp);
+        TreeNode top = treeStack.peek();
+        TreeNode node = new TreeNode();
+        node.nodeKind = NodeIdentity.ExpK;
+        node.kind = SubIdentity.ParamK;
+        ExpAttr attr = new ExpAttr();
+        node.attr = attr;
+        if(top.children[0]==null){
+            top.children[0] = node;
+            if(top.kind!=SubIdentity.ParamK) {
+                this.preF.push(this.cur);
+                this.cur = top;
+            }
+        }
+        Exps.add(node);
+
     }
 
     void process79(){
         signStack.pop();
+//        TreeNode top = treeStack.peek();
+        TreeNode node = null;
+        TreeNode params = null;
+        if(!Params.isEmpty()) {
+            node = Params.remove(0);
+            params = node;
+        }
+        while(!Params.isEmpty()){
+            TreeNode inter = Params.remove(0);
+            node.children[1] = inter;
+            node = inter;
+        }
+        treeStack.pop();
+//        this.preF.pop();
+        this.cur.children[0] = params;
+        this.cur = this.preF.pop();
+        this.cur = this.preF.pop();
     }
 
     void process80(Token token){
@@ -1413,12 +1632,26 @@ public class SyntaxAnalysis {
         signStack.pop();
         signStack.push(Symple.OtherRelE);
         signStack.push(Symple.Exp);
+        TreeNode node = new TreeNode();
+        node.nodeKind = NodeIdentity.ExpK;
+        ExpAttr attr = new ExpAttr();
+        node.attr = attr;
+        Exps.add(node);
     }
 
     void process82(){
         signStack.pop();
         signStack.push(Symple.Exp);
         signStack.push(Symple.CmpOp);
+
+        TreeNode node = new TreeNode();
+        node.nodeKind = NodeIdentity.ExpK;
+        node.kind = SubIdentity.OpK;
+        ExpAttr attr = new ExpAttr();
+//        attr.LexItem = LexItem.PLUS;
+        node.attr = attr;
+        Exps.add(node);
+//        treeStack.push(node);
     }
 
     void process83(){
@@ -1428,13 +1661,69 @@ public class SyntaxAnalysis {
     }
 
     void process84(Token token){
-        Stack<TreeNode> nodes = transform();
+        signStack.pop();
         TreeNode top = treeStack.peek();
-        if(nodes.size()==1) top.sibling = nodes.pop();
-        while(treeStack.peek().sibling!=null) treeStack.pop();
+        if(top.kind==SubIdentity.WriteK){
+            if(top.children[0]!=null) return;
+            Stack<TreeNode> nodes = transform();
+            TreeNode node = formFactor(nodes);
+            if(node==null) {
+                System.out.println("出错");
+                return;
+            }
+            ExpAttr attr = (ExpAttr) this.cur.attr;
+            if(attr!=null&&attr.varKind==2){
+                this.cur.children[0]=node;
+            }
+            else{
+                top.children[0]=node;
+                this.cur = this.preF.pop();
+            }
+            this.cur = this.preF.pop();
+        }
+
+        if(top.nodeKind==NodeIdentity.StmtK)
+            return;
+        Stack<TreeNode> nodes = transform();
+        TreeNode node = formFactor(nodes);
+        if(node==null) {
+            System.out.println("出错");
+            return;
+        }
+        if(this.cur.nodeKind==NodeIdentity.StmtK)
+            top.sibling = node;
+        else if(this.cur.nodeKind == NodeIdentity.ExpK) {
+//            ExpAttr attr = (ExpAttr) this.cur.attr;
+                if(node.kind == SubIdentity.ParamK) {
+//                    this.cur.children[1] = node;
+//                    treeStack.push(node);
+                    Params.add(node);
+                    return;
+                }
+//                else if(attr.varKind==3){
+//                    this.cur.sibling = node;
+//                }
+                else
+                    this.cur.children[0] = node;
+        }
+//        while(treeStack.peek().sibling!=null) treeStack.pop();
+        if(treeStack.contains(this.cur))
+            while (treeStack.peek()!=this.cur) treeStack.pop();
 //        treeStack.pop();
         this.cur = this.preF.pop();
-        signStack.pop();
+        if(this.cur.nodeKind==NodeIdentity.ExpK) {
+            if(flag==0){
+                ExpAttr attr = (ExpAttr) this.cur.attr;
+                if (attr.varKind == 3) {
+                    this.cur = this.preF.pop();
+                    treeStack.pop();
+                }
+            }else{
+                flag = 0;
+                Exps.remove(Exps.size()-1);
+                this.cur = this.preF.pop();
+            }
+        }
     }
 
     void process85(){
@@ -1458,6 +1747,18 @@ public class SyntaxAnalysis {
 
     void process87(Token token){
         signStack.pop();
+        if(match(token,LexItem.RPAREN)&&this.cur.nodeKind==NodeIdentity.StmtK&&
+                this.cur.kind!=SubIdentity.CallK&&this.cur.kind!=SubIdentity.WriteK){
+
+            TreeNode node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            node.kind = SubIdentity.OpK;
+            ExpAttr attr = new ExpAttr();
+            attr.LexItem = LexItem.RPAREN;
+            node.attr = attr;
+            Exps.add(node);
+            tokenIndex++;
+        }
 //        TreeNode node = treeStack.get(treeStack.size()-2);
 //        node.sibling = null;
 //        Stack<TreeNode> nodes = transform();
@@ -1472,7 +1773,16 @@ public class SyntaxAnalysis {
     }
 
     void process88(Token token){
-
+        signStack.pop();
+        signStack.push(Symple.Term);
+        signStack.push(Symple.MultOp);
+        TreeNode node = new TreeNode();
+        node.nodeKind = NodeIdentity.ExpK;
+        node.kind = SubIdentity.OpK;
+        ExpAttr attr = new ExpAttr();
+//        attr.LexItem = LexItem.PLUS;
+        node.attr = attr;
+        Exps.add(node);
     }
 
     void process89(Token token){
@@ -1514,7 +1824,8 @@ public class SyntaxAnalysis {
             if(attr.varKind == 2||attr.varKind==0){
                 attr.val = token.getSeminfo();
                 attr.LexItem = LexItem.INTC;
-                top.kind = SubIdentity.ConstK;
+                if(top.kind == 0)
+                    top.kind = SubIdentity.ConstK;
                 top.line = token.getLine();
             }
         }
@@ -1554,15 +1865,28 @@ public class SyntaxAnalysis {
             signStack.pop();
             signStack.pop();
         }
-        else if(match(token,LexItem.PLUS)){
+        else if(match(token,LexItem.LT)){
+            TreeNode top = Exps.get(Exps.size()-1);
+            top.kind = SubIdentity.IdK;
+            ExpAttr attr = (ExpAttr) top.attr;
+            attr.varKind = 1;
+//            TreeNode node = new TreeNode();
+//            node.nodeKind = NodeIdentity.ExpK;
+//            ExpAttr eattr = new ExpAttr();
+//            node.attr = eattr;
+//            this.Exps.add(node);
             signStack.pop();
         }
-        else if(match(token,LexItem.RPAREN)){
+        else if(match(token,LexItem.PLUS)||match(token,LexItem.MINUS))
             signStack.pop();
-        }
-        else if(match(token,LexItem.SEMI)){
+        else if(match(token,LexItem.RPAREN))
             signStack.pop();
-        }
+        else if(match(token,LexItem.SEMI))
+            signStack.pop();
+        else if(match(token,LexItem.TIMES)||match(token,LexItem.OVER))
+            signStack.pop();
+        else if(match(token,LexItem.RMIDPAREN))
+            signStack.pop();
 //        tokenIndex++;
     }
 
@@ -1572,16 +1896,71 @@ public class SyntaxAnalysis {
             tokenIndex++;
             signStack.push(LexItem.RMIDPAREN);
             signStack.push(Symple.Exp);
-            TreeNode top = treeStack.peek();
-            ExpAttr attr = (ExpAttr) top.attr;
-            attr.varKind = 2;
+            TreeNode top;
+            if(this.cur.nodeKind == NodeIdentity.StmtK) {
+                if(this.cur.kind == SubIdentity.WriteK){
+                    top = Exps.get(Exps.size()-1);
+                    ExpAttr attr = (ExpAttr) top.attr;
+                    attr.varKind = 2;
+                    TreeNode end = new TreeNode();
+                    end.nodeKind = 0;
+
+                    TreeNode node = new TreeNode();
+                    node.nodeKind = NodeIdentity.ExpK;
+                    ExpAttr attr1 = new ExpAttr();
+                    node.attr = attr1;
+                    this.preF.push(this.cur);
+                    this.cur = Exps.get(Exps.size()-1);
+                    Exps.add(end);   //加入栈底标志
+                    Exps.add(node);
+                    return;
+                }
+                else{
+                    top = treeStack.peek();
+                    ExpAttr attr = (ExpAttr) top.attr;
+                    if(attr.varKind==0){
+                        top.kind = SubIdentity.IdK;
+                        attr.varKind = 2;
+                    }else{
+                        top = Exps.get(Exps.size()-1);
+                        attr = (ExpAttr) top.attr;
+                        attr.varKind = 2;
+                    }
+                    TreeNode end = new TreeNode();
+                    end.nodeKind = 0;
+
+                    TreeNode node = new TreeNode();
+                    node.nodeKind = NodeIdentity.ExpK;
+                    ExpAttr attr1 = new ExpAttr();
+                    node.attr = attr1;
+                    this.preF.push(this.cur);
+                    this.cur = top;
+                    Exps.add(end);   //加入栈底标志
+                    Exps.add(node);
+                    return;
+                }
+            }else{
+                top = Exps.get(Exps.size()-1);
+                ExpAttr attr = (ExpAttr) top.attr;
+                attr.varKind = 2;
+            }
+            TreeNode end = new TreeNode();
+            end.nodeKind = 0;
 
             TreeNode node = new TreeNode();
             node.nodeKind = NodeIdentity.ExpK;
-            top.children[0] = node;
-            treeStack.push(node);
+//            top.children[0] = node;
+            ExpAttr attr1 = new ExpAttr();
+            node.attr = attr1;
+//            treeStack.push(node);
             this.preF.push(this.cur);
-            this.cur = top;
+            if(this.cur.kind==SubIdentity.AssignK){
+                this.cur = Exps.get(Exps.size()-1);
+            }
+            else
+             this.cur = top;
+            Exps.add(end);   //加入栈底标志
+            Exps.add(node);
         }else{
             System.out.println("出错");
         }
@@ -1594,37 +1973,143 @@ public class SyntaxAnalysis {
             signStack.push(Symple.FieldVar);
             TreeNode top = treeStack.peek();
             ExpAttr attr = (ExpAttr) top.attr;
-            attr.varKind = 3;
+            if(attr.varKind==0) {  //处理左部情况
+                attr.varKind = 3;
+                TreeNode node = new TreeNode();
+                node.nodeKind = NodeIdentity.ExpK;
+                top.children[0] = node;
+                ExpAttr attr1 = new ExpAttr();
+                node.attr = attr1;
+                treeStack.push(node);
+                this.preF.push(this.cur);
+                this.cur = top;
+            }else{
+                top = Exps.get(Exps.size()-1);
+                attr = (ExpAttr) top.attr;
+                attr.varKind = 3;
+                TreeNode node = new TreeNode();
+                node.nodeKind = NodeIdentity.ExpK;
+                top.children[0] = node;
+                ExpAttr attr1 = new ExpAttr();
+                node.attr = attr1;
+                Exps.add(node);
+                this.preF.push(this.cur);
+                this.cur = top;
+            }
 
-            TreeNode node = new TreeNode();
-            node.nodeKind = NodeIdentity.ExpK;
-            top.children[0] = node;
-            treeStack.push(node);
-            this.preF.push(this.cur);
-            this.cur = top;
         }else{
             System.out.println("出错");
         }
     }
 
-    void process96(){
-
+    void process96(Token token){
+        signStack.pop();
+        if(match(token,LexItem.ID)){
+            signStack.push(Symple.FieldVarMore);
+            tokenIndex++;
+            TreeNode top = treeStack.peek();
+            ExpAttr attr = (ExpAttr) top.attr;
+            if(attr.varKind==0) {
+                top.line = token.getLine();
+                attr.LexItem = LexItem.ID;
+                attr.val = token.getSeminfo();
+            }else{
+                top = Exps.get(Exps.size()-1);
+                attr = (ExpAttr) top.attr;
+                top.line = token.getLine();
+                attr.LexItem = LexItem.ID;
+                attr.val = token.getSeminfo();
+            }
+        }
+        else {
+            System.out.println("出错");
+        }
     }
 
     void process97(){
-
+        signStack.pop();
+        TreeNode top = treeStack.peek();
+        ExpAttr attr = (ExpAttr) top.attr;
+        if(attr.varKind==0)
+            attr.varKind = 1;
+        else{
+            top = Exps.get(Exps.size()-1);
+            attr = (ExpAttr) top.attr;
+            attr.varKind = 1;
+            Exps.remove(Exps.size()-1);
+        }
+        if(treeStack.contains(this.cur))
+            while(treeStack.peek()!=this.cur) treeStack.pop();
+        this.cur = this.preF.pop();
     }
 
-    void process98(){
-
+    void process98(Token token){
+        signStack.pop();
+        if(match(token,LexItem.LMIDPAREN)){
+            signStack.push(LexItem.RMIDPAREN);
+            signStack.push(Symple.Exp);
+            tokenIndex++;
+            TreeNode top = treeStack.peek();
+            ExpAttr expAttr = (ExpAttr) top.attr;
+            if(expAttr.varKind==0) {
+                expAttr.varKind = 2;
+            }else{
+                top = Exps.get(Exps.size()-1);
+                expAttr = (ExpAttr) top.attr;
+                expAttr.varKind = 2;
+                TreeNode node = new TreeNode();  //加入end标志
+                node.nodeKind = 0;
+                Exps.add(node);
+                flag = 3;
+            }
+            TreeNode node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            ExpAttr attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
+            this.preF.push(this.cur);
+            this.cur = top;
+        } else{
+            System.out.println("出错");
+        }
     }
 
-    void process99(){
+    void process99(Token token){
+        signStack.pop();
+        if(match(token,LexItem.LT)){
+            TreeNode node = Exps.get(Exps.size()-1);
+            ExpAttr attr = (ExpAttr) node.attr;
+            attr.LexItem = LexItem.LT;
 
+            node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
+            tokenIndex++;
+        }
+        else {
+            System.out.println("出错");
+        }
     }
 
-    void process100(){
+    void process100(Token token){
+        signStack.pop();
+        if(match(token,LexItem.EQ)){
+            TreeNode node = Exps.get(Exps.size()-1);
+            ExpAttr attr = (ExpAttr) node.attr;
+            attr.LexItem = LexItem.EQ;
 
+            node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
+            tokenIndex++;
+        }
+        else {
+            System.out.println("出错");
+        }
     }
 
     void process101(Token token){
@@ -1633,6 +2118,12 @@ public class SyntaxAnalysis {
             TreeNode node = Exps.get(Exps.size()-1);
             ExpAttr attr = (ExpAttr) node.attr;
             attr.LexItem = LexItem.PLUS;
+
+            node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
             tokenIndex++;
         }
         else {
@@ -1641,10 +2132,18 @@ public class SyntaxAnalysis {
     }
 
     void process102(Token token){
+        signStack.pop();
         if(match(token,LexItem.MINUS)){
             TreeNode node = Exps.get(Exps.size()-1);
             ExpAttr attr = (ExpAttr) node.attr;
             attr.LexItem = LexItem.MINUS;
+
+            node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
+            tokenIndex++;
         }
         else {
             System.out.println("出错");
@@ -1652,11 +2151,41 @@ public class SyntaxAnalysis {
     }
 
     void process103(Token token){
+        signStack.pop();
+        if(match(token,LexItem.TIMES)){
+            TreeNode node = Exps.get(Exps.size()-1);
+            ExpAttr attr = (ExpAttr) node.attr;
+            attr.LexItem = LexItem.TIMES;
 
+            node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
+            tokenIndex++;
+        }
+        else {
+            System.out.println("出错");
+        }
     }
 
     void process104(Token token){
+        signStack.pop();
+        if(match(token,LexItem.OVER)){
+            TreeNode node = Exps.get(Exps.size()-1);
+            ExpAttr attr = (ExpAttr) node.attr;
+            attr.LexItem = LexItem.OVER;
 
+            node = new TreeNode();
+            node.nodeKind = NodeIdentity.ExpK;
+            attr = new ExpAttr();
+            node.attr = attr;
+            Exps.add(node);
+            tokenIndex++;
+        }
+        else {
+            System.out.println("出错");
+        }
     }
 
 
