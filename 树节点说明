@@ -1,0 +1,59 @@
+节点nodeKind属性定义于NodeIdentity文件中。
+当nodeKind为ProK 
+  其第0个儿子节点存储程序名nodeKind为PheadK 
+  第1个儿子节点存储类型声明 nodeKind为TypeK
+  第2个儿子节点存储变量声明 nodeKind为VarK
+  第3个儿子节点存储过程声明 nodeKind为ProcDecK
+  第4个儿子节点存储语句     nodeKind为StmLK
+  
+ 当nodeKind为TypeK 
+  其第0个儿子节点存储第一个类型声明 nodeKind为DecK
+  其他儿子节点为空
+  
+ 当nodeKind为VarK
+  其第0个儿子节点存储第一个变量声明 nodekind为DecK
+  其他儿子节点为空
+ 
+ 当nodeKind为ProcDecK 
+  其兄弟节点指向同级的过程声明
+  其attr属性存储ProcAttr类型对象，其中存储参数信息
+  
+ 当nodeKind为DecK 
+  其儿子节点均为空 兄弟节点指向下一个声明
+ 
+ 当nodeKind为StmLK
+  其第0个儿子节点指向语句序列 其他为空
+ 
+ 当nodekind为StmtK 
+  其兄弟节点指向下一条语句 nodeKind为StmtK
+  不同的语句依靠kind属性区分 kind属性取值定义于SubIdentity类中
+  
+  当kind为ifK 
+    第0个儿子节点存储条件判断表达式 nodeKind为ExpK
+    第1个儿子节点存储成功情况语句序列 类型为StmtK
+    第2个儿子节点存储失败情况语句序列 类型StmtK
+    
+  当kind为whileK
+    第0个儿子节点存储判断表达式 nodeKind为ExpK
+    第1一个儿子节点存储循环体语句 nodeKind为StmtK
+  
+  当kind为CallK
+    第0个儿子节点存储函数信息 函数名存储于节点attr属性中Expattr类型对象中 
+      第0个儿子节点的第0个儿子节点存储第一个参数信息 
+      第一个参数节点的第1个儿子节点存储下一个参数
+  当kind为WriteK
+    其第0个儿子节点存储输出表达式
+  当kind为AssignK
+    其第0个儿子节点存储赋值左部
+      第0个儿子节点的兄弟存储赋值右部
+  
+  当节点nodeKind为ExpK
+  且attr属性中 varKind为0表示常量  1表示标识符变量  2数组成员  3记录成员  4表示val属性存储调用过程名
+  
+  若为数组成员 第0个儿子节点attr属性存储数组下标
+  若为记录成员 第0个儿子节点attr属性存储记录中属性名 若该记录属性为数组类型(即其attr属性valKind=2)，其第0个儿子节点存储数组下标
+  
+  
+    
+  
+  
